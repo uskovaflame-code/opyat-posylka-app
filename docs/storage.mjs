@@ -31,7 +31,7 @@ export function createStorage({telegram,localStorage,uuid=()=>crypto.randomUUID(
    const head={generation,parts:parts.length,previous:before?{generation:before.generation,parts:before.parts}:null};
    if(await call('setItem',HEAD,JSON.stringify(head))!==true)throw Error('Telegram не подтвердил сохранение');
    if((await getHead())?.generation!==generation)throw Error('Одновременное изменение на другом устройстве. Откройте приложение заново.');
-   const stale=before?.previous;if(stale&&/^[a-zA-Z0-9_-]{1,80}$/.test(stale.generation)&&Number.isInteger(stale.parts)&&stale.parts>0&&stale.parts<=MAX_PARTS){try{await call('removeItems',Array.from({length:stale.parts},(_,i)=>key(stale.generation,i)))}catch{}}
+   const stale=before?.previous;if(stale&&/^[a-zA-Z0-9_-]{1,80}$/.test(stale.generation)&&Number.isInteger(stale.parts)&&stale.parts>0&&stale.parts<=MAX_PARTS){void call('removeItems',Array.from({length:stale.parts},(_,i)=>key(stale.generation,i))).catch(()=>{})}
    return {revision:generation};
   }catch(error){
    // Only discard this attempt when no active snapshot references it.
