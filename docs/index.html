@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#284f43">
+<title>Это последнее, честно · Покупки из Китая</title><link rel="stylesheet" href="./style.css"><script src="https://telegram.org/js/telegram-web-app.js"></script><script type="module" src="./app.js"></script>
+</head>
+<body><main>
+<section class="masthead" aria-label="Это последнее, честно — покупки из Китая">
+<header><div class="brand"><svg viewBox="0 0 40 40" aria-hidden="true"><path d="M30 6C13 6 5 14 9 27c12 5 23-2 21-21Z"/><path d="M8 33 27 12M14 26l-1-9M20 20l7 1"/></svg><span>ЭТО ПОСЛЕДНЕЕ, ЧЕСТНО</span></div><button id="newParcel" class="circle" aria-label="Добавить посылку">＋</button></header>
+<div class="intro"><span class="eyebrow">МАЛЕНЬКИЕ РАДОСТИ ИЗ КИТАЯ</span><h1>Это последнее,<br><span>честно.</span></h1><p>Посылки считаем.<br>Обещания не проверяем.</p><a class="hero-link" href="#parcels">К моим посылкам <span aria-hidden="true">↗</span></a></div><figure class="brand-mascot"><img src="./assets/mascot.png" alt="Хитро улыбающаяся девушка с посылкой и скрещёнными пальцами" width="1254" height="1254" fetchpriority="high"></figure>
+</section>
+<div class="workspace">
+<div id="notice" class="notice" hidden></div>
+<div class="scope-controls">
+<section class="parcelbar"><label>Выбранная посылка<select id="parcelSelect" aria-label="Выбрать посылку"></select></label><button id="parcelSettings" class="textbtn">Настроить ↗</button></section>
+<section class="clientbar"><label>Покупки для<select id="clientSelect" aria-label="Выбрать клиента"><option value="*">Все клиенты и мои покупки</option></select></label></section>
+</div><p id="scopeLabel" class="help scope-note"></p>
+<section id="summary" aria-label="Итоги посылки"></section>
+<section class="parcel-section" id="parcels" aria-label="Мои посылки"><div class="toolbar"><h2>Мои посылки <span id="parcelCount"></span></h2><button id="newParcelWide" class="primary">＋ Новая посылка</button></div><div id="parcelCards" class="parcel-cards"></div></section>
+<div class="exportbar"><button id="exportXlsx" class="primary">↓ Скачать Excel</button><span id="exportScope">Выбранные посылки и клиент · .xlsx</span></div>
+<section class="toolbar products-toolbar"><div><span class="eyebrow">КОЛЛЕКЦИЯ НАХОДОК</span><h2>Мои товары <span id="count"></span></h2></div><button id="addItem" class="primary">＋ Добавить</button></section>
+<div class="search"><select id="searchMode" aria-label="Где искать"><option value="all">Везде</option><option value="track">По треку</option><option value="name">По названию</option></select><span aria-hidden="true">⌕</span><input id="search" type="search" placeholder="Название или трек-номер" aria-label="Поиск товара"></div>
+<nav id="filters" aria-label="Фильтр товаров"><button data-filter="all" class="active">Все</button><button data-filter="waiting">Ждём склад</button><button data-filter="arrived">На складе</button><button data-filter="pending">Без расчёта</button><button data-filter="checked">Проверено</button></nav>
+<ol id="items" aria-label="Список товаров"><li class="empty">Загружаем покупки…</li></ol>
+<footer><a class="help-link" href="./help.html">Как пользоваться приложением ↗</a><span id="saveStatus" role="status">Подключаемся…</span><div><button id="exportCsv" class="textbtn">Таблица CSV</button><button id="shareApp" class="textbtn">Отправить подруге</button><button id="backup" class="textbtn">Копия данных</button><button id="restore" class="textbtn">Восстановить</button></div><p>Цена × курс · Вес × тариф · Всё под контролем</p><span class="footer-leaf" aria-hidden="true">❧</span></footer>
+</div></main>
+<dialog id="editor"><form id="editorForm"><div class="dialoghead"><h2 id="dialogTitle"></h2><button type="button" id="closeDialog" class="circle" aria-label="Закрыть">×</button></div><div id="fields"></div><p id="formError" role="alert"></p><div class="dialogactions"><button type="button" id="deleteRecord" class="danger">Удалить</button><button type="submit" id="saveRecord" class="primary">Сохранить</button></div></form></dialog>
+<input id="restoreFile" type="file" accept="application/json,.json" hidden>
+</body></html>

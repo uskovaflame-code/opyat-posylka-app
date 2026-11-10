@@ -1,0 +1,48 @@
+// Minimal UTF-8 byte writer shared by browsers and Node.js.
+class ByteBuffer extends Uint8Array {
+ static from(value){return new ByteBuffer(typeof value==='string'?new TextEncoder().encode(value):value)}
+ static alloc(size){return new ByteBuffer(size)}
+ static concat(parts){const out=new ByteBuffer(parts.reduce((n,p)=>n+p.length,0));let offset=0;for(const p of parts){out.set(p,offset);offset+=p.length}return out}
+ writeUInt16LE(value,offset=0){new DataView(this.buffer,this.byteOffset,this.byteLength).setUint16(offset,value,true)}
+ writeUInt32LE(value,offset=0){new DataView(this.buffer,this.byteOffset,this.byteLength).setUint32(offset,value,true)}
+ readUInt32LE(offset=0){return new DataView(this.buffer,this.byteOffset,this.byteLength).getUint32(offset,true)}
+ toString(){return new TextDecoder().decode(this)}
+}
+import {calculate,scopeSummary} from './model.mjs';
+const xml=s=>String(s??'').replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g,'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&apos;'}[c]));
+const declaration='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>';
+const ns='http://schemas.openxmlformats.org/spreadsheetml/2006/main';
+const palette={none:'FFFFFF',green:'E2EFDA',blue:'DDEBF7',yellow:'FFF2CC',pink:'FCE4EC',lilac:'E8DDF4'};
+const colorNames={green:'Зелёный',blue:'Голубой',yellow:'Жёлтый',pink:'Розовый',lilac:'Сиреневый'};
+function crc32(bytes){let crc=0xffffffff;for(const b of bytes){crc^=b;for(let i=0;i<8;i++)crc=(crc>>>1)^((crc&1)?0xedb88320:0)}return(crc^0xffffffff)>>>0}
+function zip(files){const parts=[],central=[];let offset=0;for(const [name,body]of Object.entries(files)){const n=ByteBuffer.from(name),b=ByteBuffer.from(body),crc=crc32(b),h=ByteBuffer.alloc(30);h.writeUInt32LE(0x04034b50);h.writeUInt16LE(20,4);h.writeUInt16LE(0x800,6);h.writeUInt16LE(33,12);h.writeUInt32LE(crc,14);h.writeUInt32LE(b.length,18);h.writeUInt32LE(b.length,22);h.writeUInt16LE(n.length,26);parts.push(h,n,b);const c=ByteBuffer.alloc(46);c.writeUInt32LE(0x02014b50);c.writeUInt16LE(20,4);c.writeUInt16LE(20,6);c.writeUInt16LE(0x800,8);c.writeUInt16LE(33,14);c.writeUInt32LE(crc,16);c.writeUInt32LE(b.length,20);c.writeUInt32LE(b.length,24);c.writeUInt16LE(n.length,28);c.writeUInt32LE(offset,42);central.push(c,n);offset+=h.length+n.length+b.length}const cd=ByteBuffer.concat(central),end=ByteBuffer.alloc(22);end.writeUInt32LE(0x06054b50);end.writeUInt16LE(Object.keys(files).length,8);end.writeUInt16LE(Object.keys(files).length,10);end.writeUInt32LE(cd.length,12);end.writeUInt32LE(offset,16);return ByteBuffer.concat([...parts,cd,end])}
+export function exportXlsx(input,title=null){
+ const parcels=Array.isArray(input)?input:[input];
+ const parcel={name:title||(parcels.length===1?parcels[0].name:'Все посылки'),items:parcels.flatMap(p=>p.items.map(i=>({...i,exportParcel:p.name,exportTariff:p.tariff})))};
+ const keys=Object.keys(palette),style=(color,type=0)=>1+Math.max(0,keys.indexOf(color))*4+type;
+ const text=(ref,value,s)=>`<c r="${ref}" s="${s}" t="inlineStr"><is><t xml:space="preserve">${xml(value)}</t></is></c>`;
+ const number=(ref,value,s)=>value===null||value===''?`<c r="${ref}" s="${s}"/>`:`<c r="${ref}" s="${s}"><v>${Number(String(value).replace(',','.'))}</v></c>`;
+ const formula=(ref,f,value,s)=>`<c r="${ref}" s="${s}"${value===null?' t="str"':''}><f>${xml(f)}</f><v>${value===null?'':value}</v></c>`;
+ const headers=['Наименование товара','Дата склада','Номер трека','Цена, ¥','Курс, ₽/¥','Цена товара, ₽','Вес, кг','Тариф, ₽/кг','Доставка, ₽','Себестоимость, ₽','На складе в Китае','Получено и проверено','Цвет отметки','Заметка','Клиент','Посылка'];
+ const rows=[`<row r="1" ht="42" customHeight="1">${headers.map((h,i)=>text(String.fromCharCode(65+i)+'1',h,0)).join('')}</row>`];
+ parcel.items.forEach((i,index)=>{const r=index+2,c=calculate(i,i.exportTariff),color=i.checked?(i.color||'green'):'none',t=style(color),v=style(color,1),m=style(color,2),w=style(color,3);
+ rows.push(`<row r="${r}" ht="32" customHeight="1">${text('A'+r,i.name,t)}${text('B'+r,i.date?i.date.split('-').reverse().join('.'):'',t)}${text('C'+r,i.track,t)}${number('D'+r,i.price,v)}${number('E'+r,i.rate,v)}${formula('F'+r,`ROUND(D${r}*E${r},2)`,c.goods/100,m)}${number('G'+r,i.weight,w)}${number('H'+r,i.exportTariff,v)}${formula('I'+r,`IF(OR(G${r}="",H${r}=""),"",ROUND(G${r}*H${r},2))`,c.delivery===null?null:c.delivery/100,m)}${formula('J'+r,`F${r}+IF(I${r}="",0,I${r})`,c.total/100,m)}${text('K'+r,i.arrived?'Да':'Нет',t)}${text('L'+r,i.checked?'Да':'Нет',t)}${text('M'+r,i.checked?colorNames[i.color||'green']:'',t)}${text('N'+r,i.note,t)}${text('O'+r,i.client||'Для себя / без клиента',t)}${text('P'+r,i.exportParcel,t)}</row>`)
+ });
+ const s=scopeSummary(parcels),last=parcel.items.length+1,r=last+2,totalStyle=1+keys.length*4;
+ const sum=col=>last>1?`SUM(${col}2:${col}${last})`:'0';
+ rows.push(`<row r="${r}" ht="28" customHeight="1">${text('A'+r,'ИТОГО · '+parcel.name,totalStyle)}${formula('F'+r,sum('F'),s.goods/100,totalStyle)}${formula('I'+r,sum('I'),s.delivery/100,totalStyle)}${formula('J'+r,sum('J'),s.total/100,totalStyle)}</row>`);
+ rows.push(`<row r="${r+2}" ht="45" customHeight="1">${text('A'+(r+2),s.pending?`Промежуточный итог: доставка не рассчитана у ${s.pending} товаров. Пустая доставка означает, что вес или тариф ещё неизвестен.`:'Итог включает покупки и доставку всех товаров.',style('none'))}</row>`);
+ rows.push(`<row r="${r+3}" ht="45" customHeight="1">${text('A'+(r+3),'Источник: личное приложение «Мои покупки». Синие числа в D, E, G, H можно менять; F, I, J рассчитываются формулами. Трек хранится текстом. Цвет строки означает «Получено и проверено». Денежные суммы округлены до копеек.',style('none'))}</row>`);
+ const xf=(font,fill,format)=>`<xf numFmtId="${format}" fontId="${font}" fillId="${fill}" borderId="0" xfId="0" applyNumberFormat="1" applyFill="1" applyFont="1" applyAlignment="1"><alignment vertical="center" wrapText="1"/></xf>`;
+ const formats=[xf(2,2,0),...keys.flatMap((k,j)=>[xf(0,j+3,0),xf(1,j+3,164),xf(0,j+3,165),xf(1,j+3,166)]),xf(2,2,165)];
+ const styles=`<styleSheet xmlns="${ns}"><numFmts count="3"><numFmt numFmtId="164" formatCode="0.####"/><numFmt numFmtId="165" formatCode="#,##0.00"/><numFmt numFmtId="166" formatCode="0.######"/></numFmts><fonts count="3"><font><sz val="11"/><color rgb="FF233329"/><name val="Arial"/></font><font><sz val="11"/><color rgb="FF2056A0"/><name val="Arial"/></font><font><b/><sz val="11"/><color rgb="FFFFFFFF"/><name val="Arial"/></font></fonts><fills count="${keys.length+3}"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FF293C2C"/><bgColor indexed="64"/></patternFill></fill>${keys.map(k=>`<fill><patternFill patternType="solid"><fgColor rgb="FF${palette[k]}"/><bgColor indexed="64"/></patternFill></fill>`).join('')}</fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="${formats.length}">${formats.join('')}</cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>`;
+ const widths=[34,15,25,13,13,17,13,16,17,20,17,22,16,44,22,26];
+ const sheet=`<worksheet xmlns="${ns}"><dimension ref="A1:P${r+3}"/><sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews><sheetFormatPr defaultRowHeight="22"/><cols>${widths.map((w,j)=>`<col min="${j+1}" max="${j+1}" width="${w}" customWidth="1"/>`).join('')}</cols><sheetData>${rows.join('')}</sheetData><autoFilter ref="A1:P${last}"/><mergeCells count="3"><mergeCell ref="A${r}:E${r}"/><mergeCell ref="A${r+2}:P${r+2}"/><mergeCell ref="A${r+3}:P${r+3}"/></mergeCells></worksheet>`;
+ const files={
+ '[Content_Types].xml':'<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>',
+ '_rels/.rels':'<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>',
+ 'xl/workbook.xml':`<workbook xmlns="${ns}" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Покупки" sheetId="1" r:id="rId1"/></sheets><calcPr calcId="0" fullCalcOnLoad="1"/></workbook>`,
+ 'xl/_rels/workbook.xml.rels':'<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>',
+ 'xl/styles.xml':styles,'xl/worksheets/sheet1.xml':sheet};
+ return zip(Object.fromEntries(Object.entries(files).map(([k,v])=>[k,declaration+v])));
+}
