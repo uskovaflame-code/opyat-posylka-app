@@ -86,3 +86,5 @@ dialog[open]{display:flex;flex-direction:column}
 
 .card>*{min-width:0;max-width:100%}
 @media(max-width:700px){.card{grid-template-columns:minmax(0,1fr)}.ownership span{max-width:100%}.verification .statusbtn{max-width:100%;white-space:normal}.note{overflow-wrap:anywhere}}
+
+.warehouse-flag{display:inline-block;width:16px;height:11px;vertical-align:-1px;margin-right:5px;border-radius:2px;overflow:hidden;flex-shrink:0}
