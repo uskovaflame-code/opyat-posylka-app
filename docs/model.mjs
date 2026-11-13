@@ -59,3 +59,15 @@ export function validateState(state){
     for(const i of p.items){if(i.client!==undefined)str(i.client,100);if(i.checked!==undefined&&typeof i.checked!=='boolean')throw Error('Неверная отметка проверки');if(i.color!==undefined&&!Object.hasOwn(COLORS,i.color))throw Error('Неверный цвет позиции');}
   }return state;
 }
+
+
+// One shipping identifier per line, preserving leading zeroes and punctuation.
+export function trackList(parcels){
+ const seen=new Set(),tracks=[];
+ for(const parcel of parcels)for(const item of parcel.items){
+  const track=String(item.track??'').trim();if(!track)continue;
+  if(/[\r\n]/.test(track))throw Error('В одном трек-номере несколько строк. Исправьте его в карточке товара.');
+  const key=track.toUpperCase();if(seen.has(key))continue;seen.add(key);tracks.push(track);
+ }
+ return tracks;
+}

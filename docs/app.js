@@ -1,4 +1,4 @@
-import {calculate,validateState,matchesSearch,COLORS,clientName,clientList,scopedParcels,scopeSummary,putItem} from './model.mjs';
+import {calculate,validateState,matchesSearch,COLORS,clientName,clientList,scopedParcels,scopeSummary,putItem,trackList} from './model.mjs?v=20261113-tracks';
 import {createStorage} from './storage.mjs?v=20261110-mobile2';
 
 const $=s=>document.querySelector(s),tg=window.Telegram?.WebApp;tg?.ready();tg?.expand();
@@ -26,7 +26,7 @@ function renderGroups(){
  $('#parcelCards').innerHTML='<button class="parcel-tile '+(selected==='*'?'selected':'')+'" data-parcel="*"><b>Все посылки</b><span>'+state.parcels.length+' посылок · '+all.count+' товаров</span><strong>'+money(all.delivery)+' доставка</strong></button>'+cards.map(p=>{const s=scopeSummary([p]);return '<div class="parcel-tile parcel-with-tariff '+(p.id===selected?'selected':'')+'" data-parcel="'+esc(p.id)+'" role="group" aria-label="Посылка '+esc(p.name)+'"><button class="parcel-open" data-parcel="'+esc(p.id)+'"><b>'+esc(p.name)+'</b><span>'+s.count+' товаров · '+num(s.weight.toFixed(3))+' кг</span><strong>'+money(s.delivery)+' доставка'+(s.pending?' · не вся':'')+'</strong></button><button class="parcel-tariff '+(p.tariff===null||p.tariff===''?'missing':'')+'" data-tariff="'+esc(p.id)+'" aria-label="Тариф доставки посылки '+esc(p.name)+'">'+(p.tariff===null||p.tariff===''?'＋ Указать тариф доставки':'Доставка: '+esc(num(p.tariff))+' ₽/кг · изменить')+'</button></div>'}).join('');
  const who=clientSelection==='*'?'Все покупки':clientSelection==='self'?'Для себя / без клиента':$('#clientSelect').selectedOptions[0]?.textContent||client();
  $('#scopeLabel').textContent=who+' · '+(parcel()?.name||'все посылки')+'. Итоги учитывают выбранного клиента. Поиск и статусы меняют только список товаров.';
- $('#exportScope').textContent=who+' · '+(parcel()?.name||'все посылки')+' · .xlsx';
+ $('#exportScope').textContent=who+' · '+(parcel()?.name||'все посылки')+' · Excel / треки .txt';
  return who;
 }
 
@@ -34,7 +34,7 @@ function render(){
  if(!state)return;
  if(selected!=='*'&&!state.parcels.some(p=>p.id===selected))selected=state.parcels[0]?.id||'*';
  const who=renderGroups();$('#parcelSelect').innerHTML='<option value="*">Все посылки</option>'+state.parcels.map(p=>`<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('');$('#parcelSelect').value=selected||'';
- const p=parcel();$('#addItem').disabled=!state.parcels.length;$('#parcelSettings').disabled=!p;$('#exportCsv').disabled=!state.parcels.length;$('#exportXlsx').disabled=!state.parcels.length;
+ const p=parcel();$('#addItem').disabled=!state.parcels.length;$('#parcelSettings').disabled=!p;$('#exportCsv').disabled=!state.parcels.length;$('#exportXlsx').disabled=!state.parcels.length;$('#exportTracks').disabled=!state.parcels.length;
  if(!state.parcels.length){$('#summary').innerHTML='';$('#count').textContent='0';$('#items').innerHTML='<li class="empty">Создайте первую посылку кнопкой ＋ сверху.</li>';return}
  const parcels=scope(),s=scopeSummary(parcels),weight=s.weight;
  $('#summary').innerHTML=`<div class="hero"><span class="label">${esc(who)} · ${s.pending?'Текущая сумма посылки':'Полная стоимость посылки'}</span><strong>${money(s.total)}</strong><small>${s.pending?`Доставка ещё не рассчитана для ${s.pending} из ${s.count} товаров`:'Покупки и доставка учтены'}</small></div><div class="stats"><div class="stat"><span>Покупки · ${s.count} поз.</span><strong>${money(s.goods)}</strong></div><div class="stat"><span>Доставка${s.pending?' · рассчитанная часть':''}</span><strong>${money(s.delivery)}</strong></div></div><div class="progressline"><span>На складе ${s.arrived} из ${s.count}</span><span>${num(weight.toFixed(3))} кг${p&&p.tariff!==null?' · '+num(p.tariff)+' ₽/кг':''}</span></div><div class="progress"><meter aria-label="Товары на складе" min="0" max="${s.count||1}" value="${s.arrived}"></meter></div>`;
@@ -71,6 +71,18 @@ $('#editorForm').onsubmit=async e=>{e.preventDefault();if(busy)return;const f=e.
 $('#deleteRecord').onclick=async()=>{if(busy)return;const p=parcel();if(!confirm(editing.type==='parcel'?`Удалить посылку «${p.name}» и все её товары?`:'Удалить этот товар?'))return;const next=structuredClone(state);if(editing.type==='parcel')next.parcels=next.parcels.filter(p=>p.id!==editing.id);else next.parcels.find(p=>p.id===editing.sourceId).items=next.parcels.find(p=>p.id===editing.sourceId).items.filter(i=>i.id!==editing.id);try{await commit(next);$('#editor').close()}catch(e){$('#formError').textContent=e.message}};
 function download(name,data,type){const a=document.createElement('a'),url=URL.createObjectURL(new Blob([data],{type}));a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}
 $('#exportXlsx').onclick=async()=>{if(!state?.parcels.length||busy)return;const button=$('#exportXlsx');button.disabled=true;button.textContent='Готовим Excel…';try{const title=(parcel()?.name||'Все посылки')+(client()===null?'':' — '+(client()||'Для себя'));const {exportXlsx}=await import('./xlsx.mjs');const bytes=exportXlsx(scope(),title);const filename=(title.replace(/[\\/:*?"<>|]/g,'-').slice(0,90)||'Покупки')+'.xlsx';const file=new File([bytes],filename,{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});if(tg?.initData&&navigator.canShare?.({files:[file]})){await navigator.share({files:[file],title:'Мои посылки'});notice('Выберите сохранение файла или отправку через меню телефона.')}else{download(filename,bytes,file.type);notice('Excel готов. Откройте загрузки браузера; на iPhone используйте «Поделиться» → «Сохранить в Файлы».')}}catch(e){if(e.name!=='AbortError')notice(e.message||'Не удалось скачать Excel',true)}finally{button.disabled=false;button.textContent='↓ Скачать Excel'}};
+$('#exportTracks').onclick=async()=>{
+ if(!state?.parcels.length||busy)return;
+ const button=$('#exportTracks');button.disabled=true;
+ try{
+  const tracks=trackList(scope());if(!tracks.length){notice('В выбранных посылках у этого клиента пока нет трек-номеров.');return}
+  const filename='треки-'+dateNow()+'.txt',text=tracks.join('\r\n')+'\r\n';
+  const file=new File([text],filename,{type:'text/plain;charset=utf-8'});
+  if(tg?.initData&&navigator.canShare?.({files:[file]})){await navigator.share({files:[file],title:'Трек-номера'});notice('Список готов: '+tracks.length+' треков. В меню телефона можно сохранить или отправить файл.')}
+  else{download(filename,text,file.type);notice('Скачан список: '+tracks.length+' треков, каждый с новой строки. Без повторов, названий и цен.')}
+ }catch(e){if(e.name!=='AbortError')notice(e.message||'Не удалось выгрузить треки',true)}
+ finally{button.disabled=false}
+};
 $('#shareApp').onclick=async()=>{const url='https://uskovaflame-code.github.io/opyat-posylka-app/';try{if(navigator.share)await navigator.share({title:'Это последнее, честно',text:'Приложение для покупок и посылок 📦',url});else if(tg?.initData)tg.openTelegramLink('https://t.me/share/url?url='+encodeURIComponent(url)+'&text='+encodeURIComponent('Это последнее, честно 📦'));else{await navigator.clipboard.writeText(url);notice('Ссылка скопирована. Отправьте её подруге — её список покупок начнётся с нуля.')}}catch(e){if(e.name!=='AbortError')notice('Ссылка для подруги: '+url)}};
 $('#backup').onclick=()=>{if(state)download('мои-покупки-'+dateNow()+'.json',JSON.stringify({format:'china-purchases-v1',state},null,2),'application/json')};
 $('#restore').onclick=()=>$('#restoreFile').click();$('#restoreFile').onchange=async e=>{try{const file=e.target.files[0];if(!file)return;if(file.size>4000000)throw Error('Файл слишком большой');const data=JSON.parse(await file.text());if(data.format!=='china-purchases-v1')throw Error('Выберите копию данных этого приложения');validateState(data.state);if(!confirm(`Заменить текущие данные? В копии ${data.state.parcels.length} посылок. Сначала сохраните копию текущих данных.`))return;await commit(data.state);notice('Данные восстановлены')}catch(e){notice(e.message,true)}finally{e.target.value=''}};

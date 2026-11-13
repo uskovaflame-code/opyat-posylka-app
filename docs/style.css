@@ -115,3 +115,6 @@ dialog[open]{display:flex;flex-direction:column}
  .cardgrid{padding-block:4px}.cardgrid span{margin-bottom:2px}
  .card .cardfoot{gap:2px 10px}.card .verification{margin:0;padding:0}
 }
+
+.exportbar{flex-wrap:wrap;gap:10px 14px}.exportbar #exportScope{flex-basis:100%}.exportbar #exportTracks{white-space:normal}
+@media(max-width:360px){.exportbar>.primary{padding-inline:11px;font-size:11px}}
