@@ -118,3 +118,7 @@ dialog[open]{display:flex;flex-direction:column}
 
 .exportbar{flex-wrap:wrap;gap:10px 14px}.exportbar #exportScope{flex-basis:100%}.exportbar #exportTracks{white-space:normal}
 @media(max-width:360px){.exportbar>.primary{padding-inline:11px;font-size:11px}}
+
+.arrival-launch{margin:16px 0 0}.arrival-launch .primary{white-space:normal;max-width:100%}
+#fields .arrival-intro{margin:14px 0 8px;font-size:12px}#fields #arrivalText{min-height:140px;resize:vertical}#fields .arrival-upload{color:var(--accent);font-size:14px;min-height:44px;font-weight:650}
+.arrival-summary{font-size:15px;font-weight:700;color:#294735;margin:16px 0 10px}.arrival-matches{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}.arrival-matches li{padding:10px 12px;border:1px solid #a8bda6;border-radius:12px;background:#f5f3e7;overflow-wrap:anywhere}.arrival-matches strong,.arrival-matches span,.arrival-matches b{display:block}.arrival-matches strong{font-size:14px;color:#294735}.arrival-matches span{font-size:12px;color:#4b624f;margin-top:3px}.arrival-matches b{font-size:12px;color:#365b34;margin-top:5px}.arrival-matches .arrival-track{font-weight:650;color:#2a5067}.arrival-warnings{padding-left:20px;font-size:12px;line-height:1.6;color:#604a36;overflow-wrap:anywhere}.arrival-warnings li{margin:8px 0}#arrivalResult details{margin:12px 0}#arrivalResult summary{font-size:13px;font-weight:650;color:#5c4b32;min-height:36px;padding:6px 0}
