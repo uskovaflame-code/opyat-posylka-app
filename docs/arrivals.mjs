@@ -8,21 +8,33 @@ function isoDate(day,month,year){
 export function parseArrivalText(text){
  if(typeof text!=='string'||text.length>MAX_TEXT)throw Error('Сообщение слишком большое. Вставьте до 200 000 символов.');
  const records=new Map(),issues=[],conflicts=new Set();
+ let pending=null,waiting=false;
+ const missingDate=()=>{if(pending)issues.push({line:pending.line,text:pending.track,reason:'После трека не найдена дата прибытия.'});pending=null};
+ const add=(track,day,month,year,index,line)=>{
+  const key=arrivalTrackKey(track),date=isoDate(day,month,year);
+  if(key.length<6||key.length>100||!date){issues.push({line:index+1,text:line,reason:!date?'Некорректная календарная дата.':'Трек должен содержать от 6 до 100 символов.'});return}
+  const old=records.get(key);
+  if(old&&old.date!==date)conflicts.add(key);
+  else if(!old)records.set(key,{key,track:track.trim(),date});
+ };
  for(const [index,raw] of text.split(/\r?\n|\r/).entries()){
   const line=raw.replace(/[\u200b-\u200d\ufeff]/gu,'').replace(/\u00a0/g,' ').trim();
   if(!line)continue;
-  // Only explicit receipt rows are data; headings and other Telegram text are ignored.
-  const match=line.match(/^[•●▪◦*\-–—]?\s*([A-Za-z0-9][A-Za-z0-9 \t\-]{4,99})\s*[;；]\s*Дата\s+(?:прибытия|поступления)\s*:\s*(\d{1,2})\.(\d{1,2})\.(\d{4})\s*[.;]?\s*$/iu);
-  if(!match){
-   if(/Дата\s+(?:прибытия|поступления)\s*:/iu.test(line))issues.push({line:index+1,text:line,reason:'Не распознан трек или дата. Нужен формат «ТРЕК; Дата прибытия: 18.11.2026».'});
-   continue;
-  }
-  const key=arrivalTrackKey(match[1]),date=isoDate(match[2],match[3],match[4]);
-  if(key.length<6||key.length>100||!date){issues.push({line:index+1,text:line,reason:!date?'Некорректная календарная дата.':'Трек должен содержать от 6 до 100 символов.'});continue}
-  const old=records.get(key);
-  if(old&&old.date!==date)conflicts.add(key);
-  else if(!old)records.set(key,{key,track:match[1].trim(),date});
+  if(/^(?:⏳|⌛|✅|\s)*Ожидание\s*[:.]?$/iu.test(line)){missingDate();waiting=true;continue}
+  if(/^(?:✅|\s)*Прибыли\s*[:.]?$/iu.test(line)){missingDate();waiting=false;continue}
+  if(waiting)continue;
+  // A separate date belongs only to the immediately preceding track, never a heading or another row.
+  const dateOnly=line.match(/^Дата\s+(?:прибытия|поступления)\s*:\s*(\d{1,2})\.(\d{1,2})\.(\d{4})\s*[.;]?$/iu);
+  if(dateOnly&&pending){add(pending.track,...dateOnly.slice(1),index,line);pending=null;continue}
+  missingDate();
+  const content=line.replace(/^\d+[.)]\s*/, '');
+  const match=content.match(/^[•●▪◦*\-–—]?\s*([A-Za-z0-9][A-Za-z0-9 \t\-]{4,99})\s*[;；]\s*Дата\s+(?:прибытия|поступления)\s*:\s*(\d{1,2})\.(\d{1,2})\.(\d{4})\s*[.;]?\s*$/iu);
+  if(match){add(match[1],...match.slice(2),index,line);continue}
+  const track=content.match(/^[•●▪◦*\-–—]?\s*([A-Za-z0-9][A-Za-z0-9\-]{5,99})\s*$/u)?.[1];
+  if(track&&/\d/u.test(track)){pending={track,line:index+1};continue}
+  if(/Дата\s+(?:прибытия|поступления)\s*:/iu.test(line))issues.push({line:index+1,text:line,reason:'Не распознан трек или дата. Укажите трек и дату на одной строке через «;» или на двух соседних строках.'});
  }
+ missingDate();
  const entries=[];
  for(const record of records.values()){
   if(conflicts.has(record.key))issues.push({track:record.track,reason:'В сообщении для этого трека разные даты. Уточните дату и вставьте список заново.'});
