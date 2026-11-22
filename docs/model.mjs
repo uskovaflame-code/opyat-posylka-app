@@ -12,6 +12,11 @@ export function clientList(state){
   for(const p of state.parcels)for(const i of p.items){const name=clientName(i.client);if(name&&!clients.has(clientKey(name)))clients.set(clientKey(name),name)}
   return [...clients].sort((a,b)=>a[1].localeCompare(b[1],'ru'));
 }
+export function parcelItemDefaults(parcel){
+ const clients=clientList({parcels:parcel?[parcel]:[]});
+ const rate=parcel?.defaultRate??parcel?.items.find(item=>item.rate!==null&&item.rate!==undefined&&item.rate!=='')?.rate??'';
+ return {clients,rate:String(rate)};
+}
 // null means all clients; an empty string selects purchases without a client.
 export function scopedParcels(state,parcelId=null,client=null){
   return state.parcels.filter(p=>parcelId===null||p.id===parcelId).map(p=>({...p,items:p.items.filter(i=>client===null||clientKey(i.client)===clientKey(client))}));
@@ -28,8 +33,10 @@ export function putItem(state,sourceId,targetId,item){
   if(!target)throw Error('Выберите существующую посылку');
   const source=sourceId===null?null:next.parcels.find(p=>p.id===sourceId);
   if(sourceId!==null&&!source?.items.some(i=>i.id===item.id))throw Error('Товар не найден в исходной посылке');
+  const previous=source?.items.find(i=>i.id===item.id);
   if(sourceId===targetId)source.items[source.items.findIndex(i=>i.id===item.id)]=item;
   else{if(source)source.items=source.items.filter(i=>i.id!==item.id);target.items.unshift(item)}
+  if(!previous||sourceId!==targetId||String(previous.rate)!==String(item.rate))target.defaultRate=String(item.rate);
   validateState(next);return next;
 }
 export function matchesSearch(item,query,mode='all'){
@@ -54,7 +61,7 @@ export function validateState(state){
   const ids=new Set();let count=0;
   const str=(v,max=200)=>{if(typeof v!=='string'||v.length>max)throw Error('Неверное текстовое поле')};
   const id=v=>{str(v,80);if(!/^[a-zA-Z0-9_-]+$/.test(v)||ids.has(v))throw Error('Повторный или неверный идентификатор');ids.add(v)};
-  for(const p of state.parcels){id(p.id);str(p.name,100);if(!p.name.trim())throw Error('Укажите название посылки');if(p.tariff!==null&&p.tariff!=='')decimal(p.tariff);if(!Array.isArray(p.items))throw Error('Нет товаров');
+  for(const p of state.parcels){id(p.id);str(p.name,100);if(!p.name.trim())throw Error('Укажите название посылки');if(p.tariff!==null&&p.tariff!=='')decimal(p.tariff);if(p.defaultRate!==undefined&&decimal(p.defaultRate)===0n)throw Error('Курс посылки должен быть больше нуля');if(!Array.isArray(p.items))throw Error('Нет товаров');
     for(const i of p.items){if(++count>10000)throw Error('Слишком много товаров');id(i.id);str(i.name);if(!i.name.trim())throw Error('Укажите название товара');decimal(i.price);if(decimal(i.rate)===0n)throw Error('Курс должен быть больше нуля');if(i.weight!==null&&i.weight!=='')decimal(i.weight,6);str(i.track,100);str(i.date,10);str(i.note,1000);if(typeof i.arrived!=='boolean')throw Error('Неверный статус');if(i.date&&(!/^\d{4}-\d{2}-\d{2}$/.test(i.date)||!Number.isFinite(Date.parse(i.date))||new Date(i.date).toISOString().slice(0,10)!==i.date))throw Error('Неверная дата');calculate(i,p.tariff);}
     for(const i of p.items){if(i.client!==undefined)str(i.client,100);if(i.checked!==undefined&&typeof i.checked!=='boolean')throw Error('Неверная отметка проверки');if(i.color!==undefined&&!Object.hasOwn(COLORS,i.color))throw Error('Неверный цвет позиции');}
   }return state;
