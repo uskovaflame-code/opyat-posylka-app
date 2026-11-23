@@ -1,4 +1,4 @@
-import {calculate,validateState,matchesSearch,COLORS,clientName,clientList,scopedParcels,scopeSummary,putItem,trackList,parcelItemDefaults} from './model.mjs?v=20261122-defaults';
+import {calculate,validateState,matchesSearch,COLORS,clientName,clientList,scopedParcels,scopeSummary,putItem,trackList,parcelItemDefaults,trackKey,groupByTrack} from './model.mjs?v=20261123-shared-track';
 import {createStorage} from './storage.mjs?v=20261110-mobile2';
 
 const $=s=>document.querySelector(s),tg=window.Telegram?.WebApp;tg?.ready();tg?.expand();
@@ -6,6 +6,7 @@ let deviceStorage;try{deviceStorage=window.localStorage}catch{deviceStorage=null
 const store=createStorage({telegram:tg,localStorage:deviceStorage});
 let state,revision,selected,clientSelection='*',filter='all',editing=null,busy=false;
 let arrivalPreview=null,arrivalTools=null;
+let sharedTrack=null,trackGroups=new Map();
 const rubles=new Intl.NumberFormat('ru-RU',{style:'currency',currency:'RUB'});
 const money=c=>rubles.format(c/100);
 const warehouseFlag='<svg class="warehouse-flag" viewBox="0 0 30 20" role="img" aria-label="Китай"><path fill="#de2910" d="M0 0h30v20H0z"/><g fill="#ffde00"><path d="M0-3 0.674-0.927 2.853-0.927 1.09 0.354 1.763 2.427 0 1.146-1.763 2.427-1.09 0.354-2.853-0.927-0.674-0.927Z" transform="translate(5 5)"/><path d="M0-3 0.674-0.927 2.853-0.927 1.09 0.354 1.763 2.427 0 1.146-1.763 2.427-1.09 0.354-2.853-0.927-0.674-0.927Z" transform="translate(10 2) scale(.34) rotate(23)"/><path d="M0-3 0.674-0.927 2.853-0.927 1.09 0.354 1.763 2.427 0 1.146-1.763 2.427-1.09 0.354-2.853-0.927-0.674-0.927Z" transform="translate(12 4) scale(.34) rotate(45)"/><path d="M0-3 0.674-0.927 2.853-0.927 1.09 0.354 1.763 2.427 0 1.146-1.763 2.427-1.09 0.354-2.853-0.927-0.674-0.927Z" transform="translate(12 7) scale(.34) rotate(15)"/><path d="M0-3 0.674-0.927 2.853-0.927 1.09 0.354 1.763 2.427 0 1.146-1.763 2.427-1.09 0.354-2.853-0.927-0.674-0.927Z" transform="translate(10 9) scale(.34) rotate(45)"/></g></svg>';
@@ -34,18 +35,40 @@ function renderGroups(){
 function render(){
  if(!state)return;
  if(selected!=='*'&&!state.parcels.some(p=>p.id===selected))selected=state.parcels[0]?.id||'*';
+ trackGroups=groupByTrack(state.parcels);
+ if(!trackGroups.has(sharedTrack))sharedTrack=null;
  const who=renderGroups();$('#parcelSelect').innerHTML='<option value="*">Все посылки</option>'+state.parcels.map(p=>`<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('');$('#parcelSelect').value=selected||'';
  const p=parcel();$('#addItem').disabled=!state.parcels.length;$('#parcelSettings').disabled=!p;$('#exportCsv').disabled=!state.parcels.length;$('#exportXlsx').disabled=!state.parcels.length;$('#exportTracks').disabled=!state.parcels.length;$('#importArrivals').disabled=!state.parcels.length;
- if(!state.parcels.length){$('#summary').innerHTML='';$('#count').textContent='0';$('#items').innerHTML='<li class="empty">Создайте первую посылку кнопкой ＋ сверху.</li>';return}
+ if(!state.parcels.length){showTrackView([]);$('#summary').innerHTML='';$('#count').textContent='0';$('#items').innerHTML='<li class="empty">Создайте первую посылку кнопкой ＋ сверху.</li>';return}
  const parcels=scope(),s=scopeSummary(parcels),weight=s.weight;
  $('#summary').innerHTML=`<div class="hero"><span class="label">${esc(who)} · ${s.pending?'Текущая сумма посылки':'Полная стоимость посылки'}</span><strong>${money(s.total)}</strong><small>${s.pending?`Доставка ещё не рассчитана для ${s.pending} из ${s.count} товаров`:'Покупки и доставка учтены'}</small></div><div class="stats"><div class="stat"><span>Покупки · ${s.count} поз.</span><strong>${money(s.goods)}</strong></div><div class="stat"><span>Доставка${s.pending?' · рассчитанная часть':''}</span><strong>${money(s.delivery)}</strong></div></div><div class="progressline"><span>На складе ${s.arrived} из ${s.count}</span><span>${num(weight.toFixed(3))} кг${p&&p.tariff!==null?' · '+num(p.tariff)+' ₽/кг':''}</span></div><div class="progress"><meter aria-label="Товары на складе" min="0" max="${s.count||1}" value="${s.arrived}"></meter></div>`;
  renderItems(parcels,s);
 }
+const trackCountLabel=count=>count+' '+(count%100>=11&&count%100<=14?'товаров':count%10===1?'товар':count%10>=2&&count%10<=4?'товара':'товаров');
+function showTrackView(items){
+ const active=sharedTrack!==null;
+ $('#sharedTrackBar').hidden=!active;
+ $('#productSearch').hidden=active;
+ $('#filters').hidden=active;
+ $('#sharedTrackLabel').textContent=active?'Трек: '+(items[0]?.i.track||sharedTrack):'';
+}
+function itemTrack(i){
+ if(!i.track)return '';
+ const count=trackGroups.get(trackKey(i.track))?.length??0;
+ const badge=count>1?`<button type="button" class="track-count" data-shared="${esc(i.id)}">${trackCountLabel(count)} <span aria-hidden="true">›</span></button>`:'';
+ return `<div class="track track-line"><span>Трек: ${esc(i.track)}</span>${badge}</div>`;
+}
+function itemActions(i,p){
+ const edit=`data-edit="${esc(i.id)}" data-source="${esc(p.id)}"`;
+ if(!trackKey(i.track))return `<button class="edit" ${edit} aria-label="Изменить ${esc(i.name)}">⋯</button>`;
+ return `<details class="track-actions"><summary class="edit" aria-label="Действия для товара ${esc(i.name)}">⋯</summary><div class="track-actions-panel"><button type="button" ${edit}>Изменить товар</button><button type="button" data-add-track="${esc(i.id)}" data-source="${esc(p.id)}">＋ Добавить товар с этим треком</button></div></details>`;
+}
 function renderItems(parcels,s){
  if(!state)return;parcels??=scope();s??=scopeSummary(parcels);
- const search=$('#search').value;const items=parcels.flatMap(p=>p.items.map(i=>({p,i}))).filter(({i})=>matchesSearch(i,search,$('#searchMode').value)).filter(({p,i})=>filter==='all'||filter==='waiting'&&!i.arrived||filter==='arrived'&&i.arrived||filter==='pending'&&calculate(i,p.tariff).delivery===null||filter==='checked'&&i.checked);
- $('#count').textContent=items.length===s.count?items.length:`${items.length} / ${s.count}`;
- $('#items').innerHTML=items.length?items.map(({i,p})=>{const c=calculate(i,p.tariff);return `<li data-weight-pending="${i.weight==null||i.weight===''}" class="card ${i.checked?'verified color-'+esc(i.color||'green'):''}"><div class="cardhead"><div><h3 title="${esc(i.name)}">${esc(i.name)}</h3><div class="ownership"><span>${esc(clientName(i.client)||'Для себя / без клиента')}</span><span>▣ ${esc(p.name)}</span></div><span class="badge ${i.arrived?'arrived':''}">${i.arrived?warehouseFlag+'На складе':'◷ Ждём поступления'}</span>${i.track?`<div class="track">Трек: ${esc(i.track)}</div>`:''}${i.date?`<div class="track">Поступление: ${esc(i.date.split('-').reverse().join('.'))}</div>`:''}</div><button class="edit" data-edit="${esc(i.id)}" data-source="${esc(p.id)}" aria-label="Изменить ${esc(i.name)}">⋯</button></div><div class="cardgrid"><div><span>Цена товара</span><b>${money(c.goods)}</b><br><small>${esc(num(i.price))} ¥ × ${esc(num(i.rate))}</small></div><div><span>Вес</span><b>${i.weight===null?'Ещё неизвестен':esc(num(i.weight))+' кг'}</b></div><div><span>Доставка</span><b>${c.delivery===null?'Не рассчитана':money(c.delivery)}</b></div></div>${i.note?`<p class="note">${esc(i.note)}</p>`:''}<div class="cardfoot"><button class="statusbtn" data-toggle="${esc(i.id)}" data-source="${esc(p.id)}">${i.arrived?warehouseFlag+'На складе · изменить':'Отметить на складе'}</button><div>${c.delivery===null?'Пока':'Итого'} <strong>${money(c.total)}</strong></div></div><div class="verification"><button class="statusbtn" data-check="${esc(i.id)}" data-source="${esc(p.id)}">${i.checked?'✓ Получено и проверено · снять отметку':'Получено и проверено'}</button>${i.checked?'<span>Цвет можно изменить через ⋯</span>':''}</div></li>`}).join(''):'<li class="empty">Здесь пока нет товаров.<br>Добавьте покупку или измените фильтр.</li>';
+ const search=$('#search').value;const items=sharedTrack?(trackGroups.get(sharedTrack)||[]):parcels.flatMap(p=>p.items.map(i=>({p,i}))).filter(({i})=>matchesSearch(i,search,$('#searchMode').value)).filter(({p,i})=>filter==='all'||filter==='waiting'&&!i.arrived||filter==='arrived'&&i.arrived||filter==='pending'&&calculate(i,p.tariff).delivery===null||filter==='checked'&&i.checked);
+ showTrackView(items);
+ $('#count').textContent=sharedTrack?items.length:items.length===s.count?items.length:`${items.length} / ${s.count}`;
+ $('#items').innerHTML=items.length?items.map(({i,p})=>{const c=calculate(i,p.tariff);return `<li data-weight-pending="${i.weight==null||i.weight===''}" class="card ${i.checked?'verified color-'+esc(i.color||'green'):''}"><div class="cardhead"><div><h3 title="${esc(i.name)}">${esc(i.name)}</h3><div class="ownership"><span>${esc(clientName(i.client)||'Для себя / без клиента')}</span><span>▣ ${esc(p.name)}</span></div><span class="badge ${i.arrived?'arrived':''}">${i.arrived?warehouseFlag+'На складе':'◷ Ждём поступления'}</span>${itemTrack(i)}${i.date?`<div class="track">Поступление: ${esc(i.date.split('-').reverse().join('.'))}</div>`:''}</div>${itemActions(i,p)}</div><div class="cardgrid"><div><span>Цена товара</span><b>${money(c.goods)}</b><br><small>${esc(num(i.price))} ¥ × ${esc(num(i.rate))}</small></div><div><span>Вес</span><b>${i.weight===null?'Ещё неизвестен':esc(num(i.weight))+' кг'}</b></div><div><span>Доставка</span><b>${c.delivery===null?'Не рассчитана':money(c.delivery)}</b></div></div>${i.note?`<p class="note">${esc(i.note)}</p>`:''}<div class="cardfoot"><button class="statusbtn" data-toggle="${esc(i.id)}" data-source="${esc(p.id)}">${i.arrived?warehouseFlag+'На складе · изменить':'Отметить на складе'}</button><div>${c.delivery===null?'Пока':'Итого'} <strong>${money(c.total)}</strong></div></div><div class="verification"><button class="statusbtn" data-check="${esc(i.id)}" data-source="${esc(p.id)}">${i.checked?'✓ Получено и проверено · снять отметку':'Получено и проверено'}</button>${i.checked?'<span>Цвет можно изменить через ⋯</span>':''}</div></li>`}).join(''):'<li class="empty">Здесь пока нет товаров.<br>Добавьте покупку или измените фильтр.</li>';
  $('#filters').querySelectorAll('button').forEach(b=>b.classList.toggle('active',b.dataset.filter===filter));
 }
 const field=(name,label,value='',extra='')=>`<label>${label}<input name="${name}" value="${esc(value)}" ${extra}></label>`;
@@ -59,14 +82,14 @@ function selectItemClient(){
  $('#newClientLabel').hidden=!isNew;f.elements.client.disabled=!isNew;f.elements.client.required=isNew;
  f.elements.client.value=choice.startsWith('existing:')?f.elements.clientChoice.selectedOptions[0].textContent:'';
 }
-function openEditor(type,id=null,sourceId=null){
+function openEditor(type,id=null,sourceId=null,presetTrack=''){
  if(!state||busy)return;
  arrivalPreview=null;$('#saveRecord').textContent='Сохранить';$('#saveRecord').disabled=false;
  const p=(sourceId?state.parcels.find(p=>p.id===sourceId):parcel())||state.parcels[0],i=type==='item'&&id?p?.items.find(i=>i.id===id):null;editing={type,id,sourceId:type==='item'&&id?p.id:null};$('#formError').textContent='';$('#deleteRecord').hidden=!id||type==='tariff';$('#deleteRecord').textContent=type==='parcel'?'Удалить посылку':'Удалить товар';
  if(type==='arrival'){$('#dialogTitle').textContent='Поступление по списку';$('#deleteRecord').hidden=true;$('#saveRecord').textContent='Найти товары';$('#fields').innerHTML='<p class="help arrival-intro">Вставьте сообщение склада или загрузите .txt. Поддерживается и список «Ваши треки»: номер трека, затем дата на следующей строке. Можно вставить несколько страниц; раздел «Ожидание» пропускается. Ищем во всех ваших посылках и у всех клиентов, независимо от фильтров. Поступление будет отмечено после проверки списка.</p><button type="button" class="textbtn arrival-upload" id="loadArrivalText">↑ Загрузить .txt</button><input type="file" id="arrivalTextFile" accept=".txt,text/plain" hidden><label>Сообщение о прибытии<textarea name="arrivalText" id="arrivalText" maxlength="200000" placeholder="• JT1234567890123; Дата прибытия: 18.11.2026"></textarea></label><div id="arrivalResult"></div>';$('#loadArrivalText').onclick=()=>$('#arrivalTextFile').click();$('#arrivalTextFile').onchange=readArrivalFile}
  else if(type==='tariff'){$('#dialogTitle').textContent='Доставка посылки';$('#fields').innerHTML='<p class="tariff-parcel-name">'+esc(p.name)+'</p>'+field('tariff','Стоимость доставки за 1 кг, ₽',p.tariff??'','inputmode="decimal" placeholder="Например, 410"')+'<p class="help">Один тариф для всех товаров этой посылки. Доставка каждого товара = его вес × этот тариф. После сохранения все суммы пересчитаются автоматически.</p>'}
  else if(type==='parcel'){$('#dialogTitle').textContent=id?'Настройки посылки':'Новая посылка';$('#fields').innerHTML=field('name','Название посылки',id?p.name:'','required maxlength="100" placeholder="Например, Ноябрь"')+field('tariff','Доставка за 1 кг, ₽',id?p.tariff??'':'','inputmode="decimal" placeholder="Внесёте после получения"')+'<p class="help">Тариф применяется ко всем товарам этой посылки. Вес и цена каждого товара сохраняются отдельно.</p>'}
- else{$('#dialogTitle').textContent=i?'Изменить покупку':'Новая покупка';const defaultClient=i?.client??(clientSelection.startsWith('client:')?$('#clientSelect').selectedOptions[0]?.textContent||client():'');const defaultRate=i?.rate??parcelItemDefaults(p).rate;editing.rateDirty=false;$('#fields').innerHTML='<label>Посылка<select name="parcelId" required>'+state.parcels.map(x=>'<option value="'+esc(x.id)+'" '+(x.id===p.id?'selected':'')+'>'+esc(x.name)+'</option>').join('')+'</select></label><p class="help">При переносе товара доставка пересчитается по тарифу новой посылки.</p>'+'<div id="itemClientPicker">'+itemClientPicker(p,defaultClient)+'</div>'+field('name','Название товара',i?.name||'','required maxlength="200" placeholder="Что заказали?"')+`<div class="pair">${field('price','Цена в юанях, ¥',i?.price??'','required inputmode="decimal" placeholder="129,36"')}${field('rate','Курс, ₽ за 1 ¥',defaultRate,'required inputmode="decimal" placeholder="Введите свой курс"')}</div><p class="help">Курс можно изменить для этой покупки.</p><div id="livecalc" class="livecalc">Укажите цену и курс</div>`+field('weight','Вес, кг',i?.weight??'','inputmode="decimal" placeholder="Например, 1,14"')+field('track','Трек-номер · необязательно',i?.track||'','maxlength="100"')+`<label class="check"><input name="arrived" type="checkbox" ${i?.arrived?'checked':''}>Товар поступил на склад в Китае</label>`+field('date','Дата поступления · необязательно',i?.date||'','type="date"')+`<label class="check"><input name="checked" type="checkbox" ${i?.checked?'checked':''}>Получено и проверено</label><fieldset class="colorpicker"><legend>Цвет всей проверенной позиции</legend>${Object.entries(COLORS).map(([key,label])=>`<label class="swatch color-${key}" title="${label}"><input type="radio" name="color" value="${key}" ${(i?.color||'green')===key?'checked':''}><span>${label}</span></label>`).join('')}</fieldset><label>Заметка<textarea name="note" maxlength="1000">${esc(i?.note||'')}</textarea></label>`;updateLive()}
+ else{$('#dialogTitle').textContent=i?'Изменить покупку':'Новая покупка';const defaultClient=i?.client??(clientSelection.startsWith('client:')?$('#clientSelect').selectedOptions[0]?.textContent||client():'');const defaultRate=i?.rate??parcelItemDefaults(p).rate;editing.rateDirty=false;$('#fields').innerHTML='<label>Посылка<select name="parcelId" required>'+state.parcels.map(x=>'<option value="'+esc(x.id)+'" '+(x.id===p.id?'selected':'')+'>'+esc(x.name)+'</option>').join('')+'</select></label><p class="help">При переносе товара доставка пересчитается по тарифу новой посылки.</p>'+'<div id="itemClientPicker">'+itemClientPicker(p,defaultClient)+'</div>'+field('name','Название товара',i?.name||'','required maxlength="200" placeholder="Что заказали?"')+`<div class="pair">${field('price','Цена в юанях, ¥',i?.price??'','required inputmode="decimal" placeholder="129,36"')}${field('rate','Курс, ₽ за 1 ¥',defaultRate,'required inputmode="decimal" placeholder="Введите свой курс"')}</div><p class="help">Курс можно изменить для этой покупки.</p><div id="livecalc" class="livecalc">Укажите цену и курс</div>`+field('weight','Вес, кг',i?.weight??'','inputmode="decimal" placeholder="Например, 1,14"')+field('track','Трек-номер · необязательно',i?.track??presetTrack,'maxlength="100"')+`<label class="check"><input name="arrived" type="checkbox" ${i?.arrived?'checked':''}>Товар поступил на склад в Китае</label>`+field('date','Дата поступления · необязательно',i?.date||'','type="date"')+`<label class="check"><input name="checked" type="checkbox" ${i?.checked?'checked':''}>Получено и проверено</label><fieldset class="colorpicker"><legend>Цвет всей проверенной позиции</legend>${Object.entries(COLORS).map(([key,label])=>`<label class="swatch color-${key}" title="${label}"><input type="radio" name="color" value="${key}" ${(i?.color||'green')===key?'checked':''}><span>${label}</span></label>`).join('')}</fieldset><label>Заметка<textarea name="note" maxlength="1000">${esc(i?.note||'')}</textarea></label>`;updateLive()}
  document.body.classList.add('dialog-open');updateViewport();$('#editor').showModal();$('#fields').scrollTop=0;
  if(matchMedia('(max-width:700px)').matches)$('#editor').focus({preventScroll:true});else $('#fields input:not([type=file]):not(:disabled),#fields textarea').focus({preventScroll:true});
 }
@@ -82,7 +105,35 @@ function updateLive(event){if(editing?.type==='arrival'){arrivalPreview=null;$('
 $('#importArrivals').onclick=()=>openEditor('arrival');
 $('#newParcel').onclick=$('#newParcelWide').onclick=()=>openEditor('parcel');$('#parcelSettings').onclick=()=>openEditor('parcel',selected);$('#addItem').onclick=()=>openEditor('item');$('#closeDialog').onclick=()=>$('#editor').close();$('#parcelSelect').onchange=e=>{selected=e.target.value;render()};$('#clientSelect').onchange=e=>{clientSelection=e.target.value;render()};$('#parcelCards').onclick=e=>{const t=e.target.closest('[data-tariff]');if(t){const id=t.dataset.tariff;selected=id;render();openEditor('tariff',id,id);return}const b=e.target.closest('[data-parcel]');if(b){selected=b.dataset.parcel;render()}};let searchFrame;$('#search').oninput=()=>{cancelAnimationFrame(searchFrame);searchFrame=requestAnimationFrame(()=>renderItems())};$('#searchMode').onchange=()=>{$('#search').placeholder=$('#searchMode').value==='track'?'Введите трек или его часть':'Название или трек-номер';renderItems()};
 $('#filters').onclick=e=>{if(e.target.dataset.filter){filter=e.target.dataset.filter;renderItems()}};
-$('#items').onclick=async e=>{const edit=e.target.closest('[data-edit]'),toggle=e.target.closest('[data-toggle]'),check=e.target.closest('[data-check]');if(edit)openEditor('item',edit.dataset.edit,edit.dataset.source);if((toggle||check)&&!busy){const next=structuredClone(state),i=next.parcels.find(p=>p.id===(toggle||check).dataset.source).items.find(i=>i.id===(toggle?.dataset.toggle||check?.dataset.check));if(check){i.checked=!i.checked;i.color=i.color||'green'}else i.arrived=!i.arrived;try{await commit(next)}catch(e){notice(e.message,true)}}};
+$('#leaveSharedTrack').onclick=()=>{
+ sharedTrack=null;renderItems();
+ $('#items').querySelector('[data-shared]')?.focus({preventScroll:true});
+};
+document.addEventListener('click',event=>{
+ const clicked=event.target.closest('.track-actions');
+ document.querySelectorAll('.track-actions[open]').forEach(menu=>{if(menu!==clicked)menu.open=false});
+});
+$('#items').addEventListener('keydown',event=>{
+ const menu=event.target.closest('.track-actions[open]');
+ if(event.key==='Escape'&&menu){menu.open=false;menu.querySelector('summary')?.focus()}
+});
+$('#items').onclick=async e=>{
+ const related=e.target.closest('[data-shared]');
+ if(related){
+  const item=state.parcels.flatMap(p=>p.items).find(i=>i.id===related.dataset.shared);
+  if(!item)return;
+  sharedTrack=trackKey(item.track);renderItems();
+  $('#leaveSharedTrack').focus({preventScroll:true});
+  $('#sharedTrackBar').scrollIntoView({block:'nearest'});
+  return;
+ }
+ const add=e.target.closest('[data-add-track]');
+ if(add){
+  const item=state.parcels.find(p=>p.id===add.dataset.source)?.items.find(i=>i.id===add.dataset.addTrack);
+  if(item){add.closest('details').open=false;openEditor('item',null,add.dataset.source,item.track)}
+  return;
+ }
+ const edit=e.target.closest('[data-edit]'),toggle=e.target.closest('[data-toggle]'),check=e.target.closest('[data-check]');if(edit){const menu=edit.closest('details');if(menu)menu.open=false;openEditor('item',edit.dataset.edit,edit.dataset.source)}if((toggle||check)&&!busy){const next=structuredClone(state),i=next.parcels.find(p=>p.id===(toggle||check).dataset.source).items.find(i=>i.id===(toggle?.dataset.toggle||check?.dataset.check));if(check){i.checked=!i.checked;i.color=i.color||'green'}else i.arrived=!i.arrived;try{await commit(next)}catch(e){notice(e.message,true)}}};
 $('#editorForm').oninput=$('#editorForm').onchange=updateLive;
 $('#editorForm').onsubmit=async e=>{e.preventDefault();if(busy)return;if(editing?.type==='arrival'){await submitArrivals();return}const f=e.target,v=name=>f.elements[name].value.trim().replace(',','.');let next=structuredClone(state),newId,nextClient;
  try{if(editing.type==='tariff'){next.parcels.find(p=>p.id===editing.id).tariff=v('tariff')||null}

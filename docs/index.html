@@ -1,8 +1,8 @@
 <!doctype html>
-<html lang="ru" data-build="20261122-arrival-pages">
+<html lang="ru" data-build="20261123-shared-track">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#284f43">
-<title>Это последнее, честно · Покупки из Китая</title><link rel="stylesheet" href="./style.css?v=20261122-arrival-pages"><script src="https://telegram.org/js/telegram-web-app.js"></script><script type="module" src="./app.js?v=20261122-arrival-pages"></script>
+<title>Это последнее, честно · Покупки из Китая</title><link rel="stylesheet" href="./style.css?v=20261123-shared-track"><script src="https://telegram.org/js/telegram-web-app.js"></script><script type="module" src="./app.js?v=20261123-shared-track"></script>
 </head>
 <body><main>
 <section class="masthead" aria-label="Это последнее, честно — покупки из Китая">
@@ -20,7 +20,8 @@
 <div class="exportbar"><button id="exportXlsx" class="primary">↓ Скачать Excel</button><button id="exportTracks" class="primary" disabled>↓ Выгрузить треки</button><span id="exportScope">Выбранные посылки и клиент · Excel / треки .txt</span></div>
 <div class="arrival-launch"><button id="importArrivals" class="primary" disabled>🇨🇳 Поступление по списку</button></div>
 <section class="toolbar products-toolbar"><div><span class="eyebrow">КОЛЛЕКЦИЯ НАХОДОК</span><h2>Мои товары <span id="count"></span></h2></div><button id="addItem" class="primary">＋ Добавить</button></section>
-<div class="search"><select id="searchMode" aria-label="Где искать"><option value="all">Везде</option><option value="track">По треку</option><option value="name">По названию</option></select><span aria-hidden="true">⌕</span><input id="search" type="search" placeholder="Название или трек-номер" aria-label="Поиск товара"></div>
+<div id="sharedTrackBar" class="shared-track-bar" hidden><button type="button" id="leaveSharedTrack" class="textbtn">← К списку товаров</button><div><strong>Товары с этим треком</strong><span id="sharedTrackLabel"></span></div></div>
+<div class="search" id="productSearch"><select id="searchMode" aria-label="Где искать"><option value="all">Везде</option><option value="track">По треку</option><option value="name">По названию</option></select><span aria-hidden="true">⌕</span><input id="search" type="search" placeholder="Название или трек-номер" aria-label="Поиск товара"></div>
 <nav id="filters" aria-label="Фильтр товаров"><button data-filter="all" class="active">Все</button><button data-filter="waiting">Ждём склад</button><button data-filter="arrived">На складе</button><button data-filter="pending">Без расчёта</button><button data-filter="checked">Проверено</button></nav>
 <ol id="items" aria-label="Список товаров"><li class="empty">Загружаем покупки…</li></ol>
 <footer><a class="help-link" href="./help.html">Как пользоваться приложением ↗</a><span id="saveStatus" role="status">Подключаемся…</span><div><button id="exportCsv" class="textbtn">Таблица CSV</button><button id="shareApp" class="textbtn">Отправить подруге</button><button id="backup" class="textbtn">Копия данных</button><button id="restore" class="textbtn">Восстановить</button></div><p>Цена × курс · Вес × тариф · Всё под контролем</p><span class="footer-leaf" aria-hidden="true">❧</span></footer>

@@ -68,6 +68,21 @@ export function validateState(state){
 }
 
 
+export function trackKey(value){
+ return String(value??'').normalize('NFKC').replace(/[\s\u200b-\u200d\ufeff]+/gu,'').toUpperCase();
+}
+
+export function groupByTrack(parcels){
+ const groups=new Map();
+ for(const p of parcels)for(const i of p.items){
+  const key=trackKey(i.track);
+  if(!key)continue;
+  if(!groups.has(key))groups.set(key,[]);
+  groups.get(key).push({p,i});
+ }
+ return groups;
+}
+
 // One shipping identifier per line, preserving leading zeroes and punctuation.
 export function trackList(parcels){
  const seen=new Set(),tracks=[];
