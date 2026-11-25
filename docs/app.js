@@ -1,4 +1,4 @@
-import {calculate,validateState,matchesSearch,COLORS,clientName,clientList,scopedParcels,scopeSummary,putItem,trackList,parcelItemDefaults,trackKey,groupByTrack} from './model.mjs?v=20261123-shared-track';
+import {calculate,validateState,matchesSearch,COLORS,clientName,clientList,scopedParcels,scopeSummary,putItem,trackList,parcelItemDefaults,trackKey,groupByTrack} from './model.mjs?v=20261125-yuan';
 import {createStorage} from './storage.mjs?v=20261110-mobile2';
 
 const $=s=>document.querySelector(s),tg=window.Telegram?.WebApp;tg?.ready();tg?.expand();
@@ -9,6 +9,11 @@ let arrivalPreview=null,arrivalTools=null;
 let sharedTrack=null,trackGroups=new Map();
 const rubles=new Intl.NumberFormat('ru-RU',{style:'currency',currency:'RUB'});
 const money=c=>rubles.format(c/100);
+const groupedNumber=new Intl.NumberFormat('ru-RU');
+function yuan(units){
+ const fraction=String(units%10000n).padStart(4,'0').replace(/0{1,2}$/u,'');
+ return groupedNumber.format(units/10000n)+','+fraction+' ¥';
+}
 const warehouseFlag='<svg class="warehouse-flag" viewBox="0 0 30 20" role="img" aria-label="Китай"><path fill="#de2910" d="M0 0h30v20H0z"/><g fill="#ffde00"><path d="M0-3 0.674-0.927 2.853-0.927 1.09 0.354 1.763 2.427 0 1.146-1.763 2.427-1.09 0.354-2.853-0.927-0.674-0.927Z" transform="translate(5 5)"/><path d="M0-3 0.674-0.927 2.853-0.927 1.09 0.354 1.763 2.427 0 1.146-1.763 2.427-1.09 0.354-2.853-0.927-0.674-0.927Z" transform="translate(10 2) scale(.34) rotate(23)"/><path d="M0-3 0.674-0.927 2.853-0.927 1.09 0.354 1.763 2.427 0 1.146-1.763 2.427-1.09 0.354-2.853-0.927-0.674-0.927Z" transform="translate(12 4) scale(.34) rotate(45)"/><path d="M0-3 0.674-0.927 2.853-0.927 1.09 0.354 1.763 2.427 0 1.146-1.763 2.427-1.09 0.354-2.853-0.927-0.674-0.927Z" transform="translate(12 7) scale(.34) rotate(15)"/><path d="M0-3 0.674-0.927 2.853-0.927 1.09 0.354 1.763 2.427 0 1.146-1.763 2.427-1.09 0.354-2.853-0.927-0.674-0.927Z" transform="translate(10 9) scale(.34) rotate(45)"/></g></svg>';
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const num=s=>String(s??'').replace('.',',');const dateNow=()=>{const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`};
@@ -41,7 +46,7 @@ function render(){
  const p=parcel();$('#addItem').disabled=!state.parcels.length;$('#parcelSettings').disabled=!p;$('#exportCsv').disabled=!state.parcels.length;$('#exportXlsx').disabled=!state.parcels.length;$('#exportTracks').disabled=!state.parcels.length;$('#importArrivals').disabled=!state.parcels.length;
  if(!state.parcels.length){showTrackView([]);$('#summary').innerHTML='';$('#count').textContent='0';$('#items').innerHTML='<li class="empty">Создайте первую посылку кнопкой ＋ сверху.</li>';return}
  const parcels=scope(),s=scopeSummary(parcels),weight=s.weight;
- $('#summary').innerHTML=`<div class="hero"><span class="label">${esc(who)} · ${s.pending?'Текущая сумма посылки':'Полная стоимость посылки'}</span><strong>${money(s.total)}</strong><small>${s.pending?`Доставка ещё не рассчитана для ${s.pending} из ${s.count} товаров`:'Покупки и доставка учтены'}</small></div><div class="stats"><div class="stat"><span>Покупки · ${s.count} поз.</span><strong>${money(s.goods)}</strong></div><div class="stat"><span>Доставка${s.pending?' · рассчитанная часть':''}</span><strong>${money(s.delivery)}</strong></div></div><div class="progressline"><span>На складе ${s.arrived} из ${s.count}</span><span>${num(weight.toFixed(3))} кг${p&&p.tariff!==null?' · '+num(p.tariff)+' ₽/кг':''}</span></div><div class="progress"><meter aria-label="Товары на складе" min="0" max="${s.count||1}" value="${s.arrived}"></meter></div>`;
+ $('#summary').innerHTML=`<div class="hero"><span class="label">${esc(who)} · ${s.pending?'Текущая сумма посылки':'Полная стоимость посылки'}</span><strong>${money(s.total)}</strong><small>${s.pending?`Доставка ещё не рассчитана для ${s.pending} из ${s.count} товаров`:'Покупки и доставка учтены'}</small></div><div class="stats"><div class="stat"><span>Покупки · ${s.count} поз.</span><strong>${money(s.goods)}</strong><span class="purchase-yuan" aria-label="Сумма покупок в юанях">${yuan(s.yuanUnits)}</span></div><div class="stat"><span>Доставка${s.pending?' · рассчитанная часть':''}</span><strong>${money(s.delivery)}</strong></div></div><div class="progressline"><span>На складе ${s.arrived} из ${s.count}</span><span>${num(weight.toFixed(3))} кг${p&&p.tariff!==null?' · '+num(p.tariff)+' ₽/кг':''}</span></div><div class="progress"><meter aria-label="Товары на складе" min="0" max="${s.count||1}" value="${s.arrived}"></meter></div>`;
  renderItems(parcels,s);
 }
 const trackCountLabel=count=>count+' '+(count%100>=11&&count%100<=14?'товаров':count%10===1?'товар':count%10>=2&&count%10<=4?'товара':'товаров');

@@ -23,9 +23,12 @@ export function scopedParcels(state,parcelId=null,client=null){
 }
 export function scopeSummary(parcels){
   let weight=0n;
-  const total={goods:0,delivery:0,total:0,pending:0,arrived:0,count:0,weight:0,missingWeight:0};
+  const total={goods:0,yuanUnits:0n,delivery:0,total:0,pending:0,arrived:0,count:0,weight:0,missingWeight:0};
   for(const p of parcels){const s=summary(p);for(const key of ['goods','delivery','total','pending','arrived'])total[key]+=s[key];total.count+=p.items.length;
-    for(const i of p.items)if(i.weight==null||i.weight==='')total.missingWeight++;else weight+=decimal(i.weight,6);
+    for(const i of p.items){
+      total.yuanUnits+=decimal(i.price);
+      if(i.weight==null||i.weight==='')total.missingWeight++;else weight+=decimal(i.weight,6);
+    }
   }total.weight=Number(weight)/1000000;return total;
 }
 export function putItem(state,sourceId,targetId,item){
